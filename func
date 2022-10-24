@@ -1,0 +1,177 @@
+#!/bin/bash
+# 20220711
+# han
+export LANG=en_US.UTF-8
+export LC_CTYPE=en_US.UTF-8
+export 'NLS_LANG=american_america.AL32UTF8'
+
+
+#color level
+SETCOLOR_DEBUG="echo -en \\033[1;37m"
+SETCOLOR_NORMAL="echo -en \\033[0;39m"
+SETCOLOR_SUCCESS="echo -en \\033[1;32m"
+SETCOLOR_ERROR="echo -en \\033[1;31m"
+SETCOLOR_WARNING="echo -en \\033[1;33m"
+
+# 所有日志函数返回值都是0, 执行日志函数的结果必为成功. 但是打印到屏幕是分为stdout和stderr的
+script_name=$(basename "$0" 2>/dev/null)
+
+function LOGINFO() # 打印日志: 信息级别, stdout
+{
+    OLDIFS=${IFS}
+    IFS=$' \t\n'
+    time=$(date "+[%F %T]")
+    local msg
+    msg="${time}\tINFO\t${script_name}\t$*"
+    echo -e "${msg}"
+    ${SETCOLOR_NORMAL}
+    # shellcheck disable=SC1090,SC1091,SC2034,SC2046,SC2086,SC2116,SC2154
+    [[ -f "${log_file}" ]] && echo -e "${msg}" >> "${log_file}"
+    IFS=${OLDIFS}
+    return 0
+}
+
+function LOGSUCCESS() # 打印日志: 成功级别, stdout
+{
+    OLDIFS=${IFS}
+    IFS=$' \t\n'
+    time=$(date "+[%F %T]")
+    local msg
+    msg="${time}\tSUCCESS\t${script_name}\t$*"
+    ${SETCOLOR_SUCCESS}
+    echo -e "${msg}"
+    ${SETCOLOR_NORMAL}
+    [[ -f "${log_file}" ]] && echo -e "${msg}" >> "${log_file}"
+    IFS=${OLDIFS}
+    return 0
+}
+
+function LOGWARNNING() # 打印日志: 警告级别, stderr
+{
+    OLDIFS=${IFS}
+    IFS=$' \t\n'
+    time=$(date "+[%F %T]")
+    local msg
+    msg="${time}\tWARN\t${script_name}\t$*"
+    ${SETCOLOR_WARNING}
+    echo -e "${msg}" >&2
+    ${SETCOLOR_NORMAL}
+    # shellcheck disable=SC1090,SC1091,SC2034,SC2046,SC2086,SC2116,SC2154
+    if [[ -f "${log_err}" ]]
+    then
+            echo -e "${msg}" >> "${log_err}"
+    fi
+    if [[ -f "${log_file}" ]]
+    then
+            echo -e "${msg}" >> "${log_file}"
+    fi
+    IFS=${OLDIFS}
+    return 0
+}
+
+function LOGERROR() # 打印日志: 失败级别, stderr
+{
+    OLDIFS=${IFS}
+    IFS=$' \t\n'
+    time=$(date "+[%F %T]")
+    local msg
+    msg="${time}\tERROR\t${script_name}\t$*"
+    ${SETCOLOR_ERROR}
+    echo -e "${msg}" >&2
+    ${SETCOLOR_NORMAL}
+    if [[ -f "${log_err}" ]]
+    then
+            echo -e "${msg}" >> "${log_err}"
+    fi
+    if [[ -f "${log_file}" ]]
+    then
+            echo -e "${msg}" >> "${log_file}"
+    fi
+    IFS=${OLDIFS}
+    return 0
+}
+
+function LOGDEBUG() # 打印日志: 失败级别, stderr
+{
+    OLDIFS=${IFS}
+    IFS=$' \t\n'
+    time=$(date "+[%F %T]")
+    local msg
+    msg="${time}\tDEBUG\t${script_name}\t$*"
+    ${SETCOLOR_DEBUG}
+    echo -e "${msg}" >&2
+    ${SETCOLOR_NORMAL}
+    if [[ -f "${log_err}" ]]
+    then
+            echo -e "${msg}" >> "${log_err}"
+    fi
+    if [[ -f "${log_file}" ]]
+    then
+            echo -e "${msg}" >> "${log_file}"
+    fi
+    IFS=${OLDIFS}
+    return 0
+}
+
+function read_conf() # 读取section、keyword形式的配置文件 read_conf conf_file section key
+{
+    self_sect=$2;self_conf=$1;self_key=$3
+    temp_conf=$(grep -vE "^$|^#" "${self_conf}" | sed -n "/\[${self_sect}\]/I,/\[/p" | sed "/^\[/d")
+    self_result=$(echo "${temp_conf}" | grep -iw "${self_key}" | cut -d= -f2 | tail -n1)
+    # shellcheck disable=SC1090,SC1091,SC2034,SC2046,SC2086,SC2116,SC2154
+    eval "$(echo "${self_key}"="${self_result}")"
+}
+
+function read_conf_section() # 读取section、keyword形式的配置文件并将整个section的所有k-v都声明出来 read_conf conf_file section
+{
+  OLDIFS=${IFS}
+  IFS=$'\n'
+  self_sect=$2;self_conf=$1
+  temp_conf=$(grep -v ^# "$self_conf"|grep -v "^$"|sed -n "/\[${self_sect}\]/I,/^\[/p"|sed "/^\[/d")
+  for line in ${temp_conf}
+  do
+    #echo $line
+    eval "${line}"
+  done
+  IFS=${OLDIFS}
+}
+
+function getSections(){ # 读取ini文件所有的sections ,参数个数 1,参数 1 :ini 文件名
+    if [[ -f "$1" ]];then
+        sections=$(grep  -Po '(?<=\[).*(?=\])' "$1")
+        echo "${sections}"
+    else
+        echo "$1":配置文件不存在
+    fi
+}
+
+function check_var() { # 如果变量3不在环境变量里,就读配置文件,如果配置文件也没有就报错退出
+    # shellcheck disable=SC1090,SC1091,SC2034,SC2046,SC2086,SC2116,SC2154
+    key=$(eval echo $(echo "$"$3))
+    # shellcheck disable=SC1090,SC1091,SC2034,SC2046,SC2086,SC2116,SC2154
+    [[ "" == "${key}" ]] && read_conf "$1" "$2" "$3"
+    # shellcheck disable=SC1090,SC1091,SC2034,SC2046,SC2086,SC2116,SC2154
+    key=$(eval echo $(echo "$"$3))
+    [[ "" == "${key}" ]] && LOGERROR "$3 变量为空，请检查配置文件。 " && exit 3
+    unset key
+}
+
+function quota_cpu() { # 限制CPU使用率, 使用方法: quota_cpu 限定使用的核数, 注意调用该函数的脚本在执行完成后需自行删除 ${pdir} cgdelete -r cpu,cpuacct:${script_name}
+    if ! (ls /sys/fs/cgroup/cpu,cpuacct &>/dev/null); then
+        LOGERROR "该机器未安装cgroup, 无法控制cpu使用率"
+        return
+    fi
+    local quota=$1
+    local script_name
+    script_name=$(basename "$0")
+    local pid=$$
+    local period_us=100000
+    local quota_us
+    quota_us=$(echo "scale=0;${period_us}"*"${quota}/1" | bc)
+    pdir=/sys/fs/cgroup/cpu,cpuacct/${script_name}
+    mkdir -p "${pdir}"
+    echo "${pid}" > "${pdir}"/cgroup.procs
+    echo "${period_us}" > "${pdir}"/cpu.cfs_period_us
+    echo "${quota_us}" > "${pdir}"/cpu.cfs_quota_us
+}
+
