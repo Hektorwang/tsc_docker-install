@@ -19,3 +19,8 @@
 cd /home/tsc/install/tsc_docker-install
 ./install.sh install /home/tsc/docker
 ```
+
+## 运行说明  
+
+1. 数据和配置文件均配置放到安装目录下.  
+2. docker网卡默认设置为192.168.253.1, 如有需要请自行调整.  
