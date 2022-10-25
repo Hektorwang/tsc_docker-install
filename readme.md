@@ -9,6 +9,7 @@
 5. XZ utils大于4.9  
 6. iptables版本大于1.4  
 7. 必须关闭selinux  
+8. 必须使用root部署.  
 
 ## 部署方法  
 
@@ -17,6 +18,7 @@
 
 ```bash
 cd /home/tsc/install/tsc_docker-install
+chmod u+x *.sh
 ./install.sh install /home/tsc/docker
 ```
 
